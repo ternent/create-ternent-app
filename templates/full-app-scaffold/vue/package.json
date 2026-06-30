@@ -1,0 +1,22 @@
+{
+  "name": "__PROJECT_NAME__",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ternent/concord": "^0.2.9",
+    "@ternent/identity": "^0.5.0",
+    "@ternent/ledger": "^0.1.8",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.0",
+    "typescript": "^5.6.3",
+    "vite": "^7.0.0"
+  }
+}
