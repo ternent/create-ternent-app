@@ -1,8 +1,10 @@
-import { cp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import type {
   CoreFeature,
   FrontendFramework,
+  IntegrationMutationMode,
+  IntegrationStyle,
   ScaffoldTier,
 } from "../cli/prompt-wizard.js";
 
@@ -12,31 +14,115 @@ export type ScaffoldProjectInput = {
   destinationRoot: string;
   templatesRoot: string;
   framework?: FrontendFramework | null;
+  sourceRoot?: string | null;
+  integrationStyle?: IntegrationStyle | null;
+  integrationMutationMode?: IntegrationMutationMode | null;
   features?: CoreFeature[];
 };
 
-function resolveTemplateSources(input: ScaffoldProjectInput): string[] {
+type CopyPlan = {
+  source: string;
+  destination: string;
+};
+
+function resolveProjectRoot(input: ScaffoldProjectInput): string {
+  if (input.tier === "integrate-existing") {
+    return input.destinationRoot;
+  }
+
+  return join(input.destinationRoot, input.projectName);
+}
+
+function resolveCopyPlans(input: ScaffoldProjectInput, projectRoot: string): CopyPlan[] {
   if (input.tier === "core-only") {
-    return [join(input.templatesRoot, "core-only", "base")];
+    return [
+      {
+        source: join(input.templatesRoot, "core-only", "base"),
+        destination: projectRoot,
+      },
+    ];
   }
 
   if (input.tier === "functional-blueprint") {
-    return [join(input.templatesRoot, "functional-blueprint", "base")];
+    return [
+      {
+        source: join(input.templatesRoot, "functional-blueprint", "base"),
+        destination: projectRoot,
+      },
+    ];
   }
 
-  if (input.tier === "full-app-scaffold") {
+  if (input.tier === "app-shell") {
     if (!input.framework) {
-      throw new Error("A frontend framework is required for the full-app-scaffold tier.");
+      throw new Error("A frontend framework is required for the app-shell tier.");
     }
 
     return [
-      join(input.templatesRoot, "full-app-scaffold", "base"),
-      join(input.templatesRoot, "full-app-scaffold", input.framework),
+      {
+        source: join(input.templatesRoot, "app-shell", "base"),
+        destination: projectRoot,
+      },
+      {
+        source: join(input.templatesRoot, "app-shell", input.framework),
+        destination: projectRoot,
+      },
     ];
+  }
+
+  if (input.tier === "integrate-existing") {
+    if (!input.framework) {
+      throw new Error("A framework is required for the integrate-existing tier.");
+    }
+    if (!input.sourceRoot) {
+      throw new Error("A sourceRoot is required for the integrate-existing tier.");
+    }
+    if (!input.integrationStyle) {
+      throw new Error("An integrationStyle is required for the integrate-existing tier.");
+    }
+    if (!input.integrationMutationMode) {
+      throw new Error("An integrationMutationMode is required for the integrate-existing tier.");
+    }
+
+    const integrationRoot = join(projectRoot, input.sourceRoot, "ternent");
+    const plans: CopyPlan[] = [
+      {
+        source: join(input.templatesRoot, "integrate-existing", "base-root"),
+        destination: projectRoot,
+      },
+      {
+        source: join(input.templatesRoot, "integrate-existing", input.integrationStyle),
+        destination: integrationRoot,
+      },
+    ];
+
+    if (input.framework !== "agnostic") {
+      plans.push({
+        source: join(input.templatesRoot, "integrate-existing", input.framework),
+        destination: integrationRoot,
+      });
+    }
+
+    return plans;
   }
 
   throw new Error(`Scaffold tier '${input.tier}' is not supported by the copy engine yet.`);
 }
+
+type PackageJson = {
+  dependencies?: Record<string, string>;
+  scripts?: Record<string, string>;
+  [key: string]: unknown;
+};
+
+const integrateExistingDependencies: Record<string, string> = {
+  "@ternent/concord": "^0.2.9",
+  "@ternent/identity": "^0.5.0",
+  "@ternent/ledger": "^0.1.8",
+};
+
+const integrateExistingScripts: Record<string, string> = {
+  "ternent:check": "tsc --noEmit",
+};
 
 async function assertDestinationReady(destinationDir: string): Promise<void> {
   try {
@@ -50,6 +136,127 @@ async function assertDestinationReady(destinationDir: string): Promise<void> {
     }
     throw error;
   }
+}
+
+async function assertFileMissing(path: string, message: string): Promise<void> {
+  try {
+    await access(path);
+    throw new Error(message);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+}
+
+async function assertDirectoryReady(path: string, message: string): Promise<void> {
+  try {
+    const entries = await readdir(path);
+    if (entries.length > 0) {
+      throw new Error(message);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+}
+
+async function assertScaffoldReady(
+  input: ScaffoldProjectInput,
+  projectRoot: string,
+): Promise<void> {
+  if (input.tier !== "integrate-existing") {
+    await assertDestinationReady(projectRoot);
+    return;
+  }
+
+  const sourceRoot = input.sourceRoot ?? "src";
+  await assertFileMissing(
+    join(projectRoot, "ternent.config.ts"),
+    "ternent.config.ts already exists in the target host.",
+  );
+  await assertDirectoryReady(
+    join(projectRoot, sourceRoot, "ternent"),
+    "Ternent integration root already exists and is not empty.",
+  );
+}
+
+function createIntegrationReport(input: ScaffoldProjectInput): string {
+  const sourceRoot = input.sourceRoot ?? "src";
+  const integrationRoot = `${sourceRoot}/ternent`;
+  const uiMountPath =
+    input.framework === "agnostic" ? `${integrationRoot}/index.ts` : `${integrationRoot}/ui`;
+  const adapterPath =
+    input.framework === "agnostic"
+      ? `${integrationRoot}/createTernentApi.ts`
+      : `${integrationRoot}/useTernent.ts`;
+  const dependencyLines = Object.entries(integrateExistingDependencies)
+    .map(([name, version]) => `- \`${name}\`: \`${version}\``)
+    .join("\n");
+  const scriptLines = Object.entries(integrateExistingScripts)
+    .map(([name, command]) => `- \`${name}\`: \`${command}\``)
+    .join("\n");
+
+  return [
+    "# Ternent Integration Report",
+    "",
+    `Project: \`${input.projectName}\``,
+    `Integration style: \`${input.integrationStyle}\``,
+    `Source root: \`${input.sourceRoot}\``,
+    "",
+    "package.json was not modified.",
+    "",
+    "Recommended dependencies:",
+    dependencyLines,
+    "",
+    "Recommended scripts:",
+    scriptLines,
+    "",
+    "Manual next steps:",
+    "- Install the dependencies above in your host app.",
+    `- Mount the generated \`${uiMountPath}\` surface into a route or page.`,
+    `- Wire the generated \`${adapterPath}\` adapter into your host application.`,
+    "",
+  ].join("\n");
+}
+
+async function applyIntegrationMutationPolicy(
+  input: ScaffoldProjectInput,
+  projectRoot: string,
+): Promise<void> {
+  if (input.tier !== "integrate-existing") {
+    return;
+  }
+
+  if (input.integrationMutationMode === "safe-report-only") {
+    await writeFile(
+      join(projectRoot, "ternent.integration-report.md"),
+      createIntegrationReport(input),
+      "utf8",
+    );
+    return;
+  }
+
+  if (input.integrationMutationMode !== "assisted-package-json") {
+    return;
+  }
+
+  const packageJsonPath = join(projectRoot, "package.json");
+  const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as PackageJson;
+
+  packageJson.dependencies = {
+    ...integrateExistingDependencies,
+    ...(packageJson.dependencies ?? {}),
+  };
+  packageJson.scripts = {
+    ...integrateExistingScripts,
+    ...(packageJson.scripts ?? {}),
+  };
+
+  await writeFile(`${packageJsonPath}`, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
 }
 
 function createTemplateVariables(input: ScaffoldProjectInput): Record<string, string> {
@@ -114,18 +321,19 @@ async function transformGeneratedFiles(projectRoot: string, variables: Record<st
 }
 
 export async function scaffoldProject(input: ScaffoldProjectInput): Promise<{ projectRoot: string }> {
-  const projectRoot = join(input.destinationRoot, input.projectName);
-  const templateSources = resolveTemplateSources(input);
+  const projectRoot = resolveProjectRoot(input);
+  const copyPlans = resolveCopyPlans(input, projectRoot);
   const variables = createTemplateVariables(input);
 
-  await assertDestinationReady(projectRoot);
+  await assertScaffoldReady(input, projectRoot);
   await mkdir(projectRoot, { recursive: true });
 
-  for (const templateSource of templateSources) {
-    await cp(templateSource, projectRoot, { recursive: true });
+  for (const plan of copyPlans) {
+    await cp(plan.source, plan.destination, { recursive: true });
   }
 
   await transformGeneratedFiles(projectRoot, variables);
+  await applyIntegrationMutationPolicy(input, projectRoot);
 
   return { projectRoot };
 }

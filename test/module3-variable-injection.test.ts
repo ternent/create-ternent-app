@@ -40,7 +40,7 @@ async function createTemplatesRoot() {
   );
 
   await writeFixtureFile(
-    join(root, "full-app-scaffold", "base", "package.json"),
+    join(root, "app-shell", "base", "package.json"),
     JSON.stringify(
       {
         name: "__PROJECT_NAME__",
@@ -51,7 +51,7 @@ async function createTemplatesRoot() {
     ),
   );
   await writeFixtureFile(
-    join(root, "full-app-scaffold", "base", "src", "ternent.config.ts"),
+    join(root, "app-shell", "base", "src", "ternent.config.ts"),
     [
       "export const ternentEngine = createEngine({",
       "  systemModules: {",
@@ -66,12 +66,39 @@ async function createTemplatesRoot() {
     ].join("\n"),
   );
   await writeFixtureFile(
-    join(root, "full-app-scaffold", "base", "src", "app", "plugins", "tasks.ts"),
+    join(root, "app-shell", "base", "src", "app", "api", "createAppApi.ts"),
+    [
+      "export async function createAppApi() {",
+      "  return {",
+      "    status: {},",
+      "    lastError: {},",
+      "    identity: {},",
+      "    users: {},",
+      "    permissions: {},",
+      "    privacy: {},",
+      "    storage: {},",
+      "    createOnboardingDraft() {},",
+      "    unlockWithPassword() {},",
+      "    readableForViewer() {},",
+      "    visible() {},",
+      "    replay() {},",
+      "    commit() {},",
+      "  };",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  await writeFixtureFile(
+    join(root, "app-shell", "base", "src", "app", "plugins", "tasks.ts"),
     [
       "export type TaskRecord = {",
       "  audienceType: \"everyone\" | \"user\" | \"permission\";",
       "  columnId: string;",
       "};",
+      "",
+      "export function selectVisibleTasks() {",
+      "  return [];",
+      "}",
       "",
       "export const taskHandlers = {",
       "  \"task.create\": () => null,",
@@ -81,8 +108,21 @@ async function createTemplatesRoot() {
     ].join("\n"),
   );
   await writeFixtureFile(
-    join(root, "full-app-scaffold", "vue", "vite.config.ts"),
+    join(root, "app-shell", "vue", "vite.config.ts"),
     "export default 'vue';\n",
+  );
+  await writeFixtureFile(
+    join(root, "app-shell", "vue", "src", "App.vue"),
+    [
+      "<template>",
+      "  <div>",
+      "    {{ api?.identity.getActiveIdentity() }}",
+      "    {{ api?.permissions.readableForViewer() }}",
+      "    {{ api?.tasks.visible() }}",
+      "  </div>",
+      "</template>",
+      "",
+    ].join("\n"),
   );
 
   return root;
@@ -141,13 +181,13 @@ describe("Module 3 template variable injection", () => {
     expect(config).toContain("ageEncryption: false");
   });
 
-  it("includes the production task payload structures and handlers in tier-3 output", async () => {
+  it("includes the shell API and sample plugin contracts in app-shell output", async () => {
     const templatesRoot = await createTemplatesRoot();
     const destinationRoot = await mkdtemp(join(tmpdir(), "ternent-module3-dest-"));
     tempRoots.push(templatesRoot, destinationRoot);
 
     const { projectRoot } = await scaffoldProject({
-      tier: "full-app-scaffold",
+      tier: "app-shell",
       projectName: "workspace-shell",
       destinationRoot,
       templatesRoot,
@@ -163,15 +203,37 @@ describe("Module 3 template variable injection", () => {
       join(projectRoot, "src", "app", "plugins", "tasks.ts"),
       "utf8",
     );
+    const createAppApi = await readFile(
+      join(projectRoot, "src", "app", "api", "createAppApi.ts"),
+      "utf8",
+    );
+    const appView = await readFile(join(projectRoot, "src", "App.vue"), "utf8");
 
     expect(packageJson.name).toBe("workspace-shell");
     expect(config).toContain("systemModules:");
     expect(config).toContain("users: true");
     expect(config).toContain("permissions: true");
     expect(config).toContain("ageEncryption: true");
+    expect(createAppApi).toContain("status:");
+    expect(createAppApi).toContain("lastError:");
+    expect(createAppApi).toContain("identity:");
+    expect(createAppApi).toContain("users:");
+    expect(createAppApi).toContain("permissions:");
+    expect(createAppApi).toContain("privacy:");
+    expect(createAppApi).toContain("storage:");
+    expect(createAppApi).toContain("createOnboardingDraft");
+    expect(createAppApi).toContain("unlockWithPassword");
+    expect(createAppApi).toContain("readableForViewer");
+    expect(createAppApi).toContain("visible()");
+    expect(createAppApi).toContain("replay(");
+    expect(createAppApi).toContain("commit(");
     expect(tasksPlugin).toContain("audienceType");
     expect(tasksPlugin).toContain("columnId");
     expect(tasksPlugin).toContain('"task.create"');
     expect(tasksPlugin).toContain('"task.move"');
+    expect(tasksPlugin).toContain("selectVisibleTasks");
+    expect(appView).toContain("api?.identity.getActiveIdentity()");
+    expect(appView).toContain("api?.permissions.readableForViewer()");
+    expect(appView).toContain("api?.tasks.visible()");
   });
 });

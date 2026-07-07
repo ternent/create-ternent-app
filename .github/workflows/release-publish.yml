@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify publish payload
+        run: pnpm run verify
+
       - name: Publish Release
         run: pnpm release
         env:

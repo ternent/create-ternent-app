@@ -36,6 +36,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify release candidate
+        run: pnpm run verify
+
       - name: Create release pull request
         uses: changesets/action@v1
         with:

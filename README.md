@@ -4,7 +4,8 @@ Scaffold replay-first Ternent applications with a tiered template matrix:
 
 - `Core Only`: raw TypeScript infrastructure over `@ternent/concord` and `@ternent/ledger`
 - `Functional Blueprint`: a vanilla HTML/TS sandbox that logs replay state in real time
-- `Full App Scaffold`: a richer app-runtime shell with audience-aware tasks, privacy services, and framework overlays
+- `App Shell`: a richer app-runtime shell with native system modules, privacy services, and framework overlays
+- `Integrate Existing`: an additive Ternent integration subtree for existing host applications
 
 ## Install
 
@@ -21,6 +22,11 @@ pnpm dlx @ternent/create-ternent-app
 ```
 
 The CLI opens an interactive prompt wizard and generates a new project in the current directory.
+
+Runtime requirements:
+
+- Node.js `>=20`
+- `pnpm` `11.x` for local development and release verification
 
 ## Scaffolding Matrix
 
@@ -61,7 +67,7 @@ Best for:
 - event-log and replay debugging
 - validating command and projection behavior quickly
 
-### 3. Full App Scaffold
+### 3. App Shell
 
 Use this when you want the higher-level workspace-style runtime pattern.
 
@@ -81,14 +87,47 @@ Best for:
 - privacy-aware collaborative workspaces
 - apps that want to start close to the Ternent workspace runtime model
 
+Scope note:
+
+- this is an advanced scaffold, not a full clone of the `../workspace` product runtime
+- identity, onboarding, storage, and privacy flows are scaffold seams intended for extension
+
+### 4. Integrate Existing
+
+Use this when you already have an application shell and want to add Ternent without replacing your host architecture.
+
+Generated shape:
+
+- root `ternent.config.ts`
+- `src/ternent/` integration subtree
+- native `users` and `permissions` system seams
+- `identity-session` and `privacy` runtime services
+- framework adapter and mountable integration panel
+- sample plugin and viewer-filtered selectors
+
+Mutation modes:
+
+- `safe-report-only`: generates a root integration report and leaves `package.json` untouched
+- `assisted-package-json`: updates `package.json` with Ternent dependencies and a namespaced check script
+
+Best for:
+
+- existing frontend products
+- teams with an established router and design system
+- incremental Ternent adoption inside a live codebase
+
 ## Prompt Flow
 
 The CLI currently routes through these decisions:
 
 1. `Project Name`
 2. `Core Layer Profile`
-3. `Frontend Framework UI` for `Full App Scaffold` only
-4. `Default Core Components`
+3. `Frontend Framework UI` for `App Shell` only
+4. `Host Framework` for `Integrate Existing`
+5. `Target Source Root` for `Integrate Existing`
+6. `Host Integration Style` for `Integrate Existing`
+7. `Package Mutation Mode` for `Integrate Existing`
+8. `Default Core Components` for every tier except `Core Only`
 
 Default feature toggles:
 
@@ -97,6 +136,13 @@ Default feature toggles:
 - `Snapshot Engine & Local Ledger Cache`
 
 Those selections are injected into generated config so template placeholders are replaced during scaffold.
+
+Routing notes:
+
+- `Core Only` skips framework and feature prompts entirely
+- `Functional Blueprint` skips framework selection but still captures feature toggles
+- `App Shell` requires a framework overlay
+- `Integrate Existing` captures framework, source root, integration style, and package mutation mode before feature selection
 
 ## Pluggable Sync Lifecycle Hooks
 
@@ -147,10 +193,16 @@ Repo inventory lives under [templates/](/Users/sam/dev/ternent/create-ternent-ap
 
 - `templates/core-only/base/`
 - `templates/functional-blueprint/base/`
-- `templates/full-app-scaffold/base/`
-- `templates/full-app-scaffold/react/`
-- `templates/full-app-scaffold/vue/`
-- `templates/full-app-scaffold/svelte/`
+- `templates/app-shell/base/`
+- `templates/app-shell/react/`
+- `templates/app-shell/vue/`
+- `templates/app-shell/svelte/`
+- `templates/integrate-existing/base-root/`
+- `templates/integrate-existing/isolated-module/`
+- `templates/integrate-existing/plugin-api-seams-only/`
+- `templates/integrate-existing/react/`
+- `templates/integrate-existing/vue/`
+- `templates/integrate-existing/svelte/`
 
 The scaffold engine copies the appropriate base template, applies any framework overlay, and replaces template variables such as:
 
@@ -170,7 +222,7 @@ pnpm install
 Run the verification suite:
 
 ```bash
-pnpm test
+pnpm run verify
 ```
 
 Build the published CLI payload:

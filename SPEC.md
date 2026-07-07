@@ -31,7 +31,7 @@ To minimize developer friction and maximize distribution, the entry point for th
 ### 1. Template Matrix Options
 * **Tier 1: Core Only (Framework Agnostic):** Raw TypeScript engine initialization files, configuration modules, and schema validators. No UI or layout code.
 * **Tier 2: Functional Blueprint (Vanilla TS):** A barebones HTML structure that visualizes signed ledger states and app mutations using native DOM manipulations.
-* **Tier 3: Full App Scaffold:** Complete UI-reactive templates containing built-in authentication, mnemonic generation views, and task/data view matrices based on production command structures.
+* **Tier 3: App Shell:** Complete UI-reactive templates containing built-in authentication, mnemonic generation views, and task/data view matrices based on production command structures.
 
 ### 2. User Prompts Layout
 ```text
@@ -44,7 +44,7 @@ To minimize developer friction and maximize distribution, the entry point for th
 ? Select Core Layer Profile:
   ○ Core Only            [Cryptographic runtimes & definitions only]
   ○ Functional Blueprint [Barebone state logging using Vanilla HTML/TS]
-❯ ● Full App Scaffold   [Complete interactive platform workspace setup]
+❯ ● App Shell           [Complete secure Ternent application shell]
 
 ? Select Frontend Framework UI (Skip if choosing Core/Blueprint):
 ❯ ● React    (Vite + TS)
